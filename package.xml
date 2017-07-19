@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package>
-  <name>choreonoid-rosplugin</name>
+  <name>choreonoid_rosplugin</name>
   <version>1.6.0</version>
   <description>The Choreonoid ROSPlugin package</description>
 

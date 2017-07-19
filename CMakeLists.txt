@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(choreonoid-rosplugin)
+project(choreonoid_rosplugin)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 add_compile_options(-std=c++11)
@@ -11,9 +11,14 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp 
 )
 
-include(FindPkgConfig)
-pkg_check_modules(CNOID REQUIRED choreonoid)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(CNOID REQUIRED choreonoid-body-plugin)
 
+execute_process(COMMAND 
+  ${PKG_CONFIG_EXECUTABLE} choreonoid --variable=subdir
+  OUTPUT_VARIABLE CNOID_SUBDIR
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -106,7 +111,8 @@ pkg_check_modules(CNOID REQUIRED choreonoid)
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
 #  INCLUDE_DIRS include
-#  LIBRARIES rosplugin
+  LIBRARIES
+  CFG_EXTRAS choreonoid_rosplugin-extras.cmake
 #  CATKIN_DEPENDS other_catkin_pkg
 #  DEPENDS system_lib
 )
@@ -118,7 +124,7 @@ catkin_package(
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-  ${catkin_INCLUDE_DIRS}
+  ${catkin_INCLUDE_DIRS} 
   ${CNOID_INCLUDE_DIRS}
 )
 
@@ -130,6 +136,9 @@ link_directories(
 add_library(CnoidROSPlugin
    src/ROSPlugin.cpp
 )
+
+set_target_properties(CnoidROSPlugin PROPERTIES 
+  LIBRARY_OUTPUT_DIRECTORY ${CATKIN_DEVEL_PREFIX}/lib/${CNOID_SUBDIR})
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
