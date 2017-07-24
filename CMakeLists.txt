@@ -135,6 +135,7 @@ link_directories(
 ## Declare a C++ library
 add_library(CnoidROSPlugin
    src/ROSPlugin.cpp
+   src/BodyROSItem.cpp
 )
 
 set_target_properties(CnoidROSPlugin PROPERTIES 
