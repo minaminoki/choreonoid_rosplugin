@@ -1,16 +1,31 @@
 #include "BodyROSItem.h"
 #include <cnoid/ItemManager>
 #include <cnoid/BodyItem>
+#include <cnoid/TimeBar>
 #include <cnoid/ConnectionSet>
 #include <ros/node_handle.h>
+#include <sensor_msgs/JointState.h>
+#include <iostream>
 
 using namespace std;
 using namespace cnoid;
 
-void BodyROSItem::initialize(ExtensionManager* ext)
+namespace {
+
+class BodyNode
 {
-    ext->itemManager().registerClass<BodyROSItem>("BodyROSItem");
-    ext->itemManager().addCreationPanel<BodyROSItem>();
+public:
+    std::unique_ptr<ros::NodeHandle> rosNode;
+    BodyItem* bodyItem;
+    TimeBar* timeBar;
+    ScopedConnectionSet connections;
+    sensor_msgs::JointState jointState;
+    ros::Publisher jointStatePublisher;
+
+    BodyNode(BodyItem* bodyItem);
+    void publishJointState();    
+};
+
 }
 
 namespace cnoid {
@@ -19,15 +34,20 @@ class BodyROSItemImpl
 {
 public:
     BodyROSItem* self;
-    BodyItem* bodyItem;
-    ScopedConnectionSet bodyItemConnections;
-    std::shared_ptr<ros::NodeHandle> rosNode;
+    unique_ptr<BodyNode> bodyNode;
 
     BodyROSItemImpl(BodyROSItem* self);
     ~BodyROSItemImpl();
-    void updateBodyItem(BodyItem* item);
+    void setBodyItem(BodyItem* bodyItem, bool forceUpdate);
 };
 
+}
+
+
+void BodyROSItem::initialize(ExtensionManager* ext)
+{
+    ext->itemManager().registerClass<BodyROSItem>("BodyROSItem");
+    ext->itemManager().addCreationPanel<BodyROSItem>();
 }
 
 
@@ -47,7 +67,6 @@ BodyROSItem::BodyROSItem(const BodyROSItem& org)
 BodyROSItemImpl::BodyROSItemImpl(BodyROSItem* self)
     : self(self)
 {
-    bodyItem =0;
 }
 
 
@@ -71,37 +90,30 @@ Item* BodyROSItem::doDuplicate() const
 
 void BodyROSItem::onPositionChanged()
 {
-    auto newBodyItem = findOwnerItem<BodyItem>();
-    if(newBodyItem != impl->bodyItem){
-        impl->updateBodyItem(newBodyItem);
+    impl->setBodyItem(findOwnerItem<BodyItem>(), false);
+}
+
+
+void BodyROSItemImpl::setBodyItem(BodyItem* bodyItem, bool forceUpdate)
+{
+    if(bodyNode){
+        if(forceUpdate || bodyItem != bodyNode->bodyItem){
+            bodyNode.reset();
+        }
+    }
+    if(bodyItem){
+        bodyNode.reset(new BodyNode(bodyItem));
+
+        bodyNode->connections.add(
+            bodyItem->sigNameChanged().connect(
+                [&](const std::string& oldName){ setBodyItem(bodyItem, true); }));
     }
 }
 
 
 void BodyROSItem::onDisconnectedFromRoot()
 {
-
-}
-
-
-void BodyROSItemImpl::updateBodyItem(BodyItem* item)
-{
-    bodyItem = item;
-    bodyItemConnections.disconnect();
-
-    if(!bodyItem){
-        rosNode.reset();
-
-    } else {
-        string name = bodyItem->name();
-        std::replace(name.begin(), name.end(), '-', '_');
-        rosNode = make_shared<ros::NodeHandle>(name);
-
-        bodyItemConnections.add(
-            bodyItem->sigNameChanged().connect(
-                [&](const std::string& oldName){ updateBodyItem(bodyItem); }));
-    }
-
+    impl->bodyNode.reset();
 }
 
 
@@ -144,4 +156,51 @@ bool BodyROSItem::store(Archive& archive)
 bool BodyROSItem::restore(const Archive& archive)
 {
     return true;
+}
+
+
+BodyNode::BodyNode(BodyItem* bodyItem)
+    : bodyItem(bodyItem),
+      timeBar(TimeBar::instance())
+{
+    string name = bodyItem->name();
+    std::replace(name.begin(), name.end(), '-', '_');
+
+    rosNode.reset(new ros::NodeHandle(name));
+
+    jointStatePublisher = rosNode->advertise<sensor_msgs::JointState>("joint_state", 1000);
+
+    connections.add(
+        bodyItem->sigKinematicStateChanged().connect(
+            [&](){ publishJointState(); }));
+
+    publishJointState();
+}
+
+
+void BodyNode::publishJointState()
+{
+    if(jointStatePublisher.getNumSubscribers() == 0){
+        return;
+    }
+    
+    jointState.header.stamp.fromSec(timeBar->time());
+
+    Body* body = bodyItem->body();
+    const int n = body->numJoints();
+    
+    jointState.name.resize(n);
+    jointState.position.resize(n);
+    jointState.velocity.resize(n);
+    jointState.effort.resize(n);
+
+    for(int i=0; i < n; ++i){
+        Link* joint = body->joint(i);
+        jointState.name[i] = joint->name();
+        jointState.position[i] = joint->q();
+        jointState.velocity[i] = joint->dq();
+        jointState.effort[i] = joint->u();
+    }
+
+    jointStatePublisher.publish(jointState);
 }
