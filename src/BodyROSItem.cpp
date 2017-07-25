@@ -23,6 +23,7 @@ public:
     ros::Publisher jointStatePublisher;
 
     BodyNode(BodyItem* bodyItem);
+    void initializeJointState();
     void publishJointState();    
 };
 
@@ -170,33 +171,37 @@ BodyNode::BodyNode(BodyItem* bodyItem)
 
     jointStatePublisher = rosNode->advertise<sensor_msgs::JointState>("joint_state", 1000);
 
-    connections.add(
-        bodyItem->sigKinematicStateChanged().connect(
-            [&](){ publishJointState(); }));
-
-    publishJointState();
+    if(jointStatePublisher){
+        initializeJointState();
+        publishJointState();
+        connections.add(
+            bodyItem->sigKinematicStateChanged().connect(
+                [&](){ publishJointState(); }));
+    }
 }
 
 
-void BodyNode::publishJointState()
+void BodyNode::initializeJointState()
 {
-    if(jointStatePublisher.getNumSubscribers() == 0){
-        return;
-    }
-    
-    jointState.header.stamp.fromSec(timeBar->time());
-
     Body* body = bodyItem->body();
     const int n = body->numJoints();
-    
     jointState.name.resize(n);
     jointState.position.resize(n);
     jointState.velocity.resize(n);
     jointState.effort.resize(n);
-
     for(int i=0; i < n; ++i){
+        jointState.name[i] = body->joint(i)->name();
+    }
+}
+    
+
+void BodyNode::publishJointState()
+{
+    jointState.header.stamp.fromSec(timeBar->time());
+
+    Body* body = bodyItem->body();
+    for(int i=0; i < body->numJoints(); ++i){
         Link* joint = body->joint(i);
-        jointState.name[i] = joint->name();
         jointState.position[i] = joint->q();
         jointState.velocity[i] = joint->dq();
         jointState.effort[i] = joint->u();

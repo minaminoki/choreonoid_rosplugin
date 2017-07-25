@@ -13,7 +13,9 @@ class ROSPlugin : public Plugin
     std::unique_ptr<ros::AsyncSpinner> spinner;
     
 public:
-    ROSPlugin() : Plugin("ROS") { }
+    ROSPlugin() : Plugin("ROS") {
+        require("Body");
+    }
   
     virtual bool initialize()
     {
