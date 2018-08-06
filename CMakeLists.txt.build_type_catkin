@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 2.8.3)
 project(choreonoid_rosplugin)
 
 add_compile_options(-std=c++11)
@@ -12,6 +12,10 @@ find_package(catkin REQUIRED COMPONENTS
 
 #find_package(Choreonoid 1.7 REQUIRED COMPONENTS BodyPlugin)
 find_package(Choreonoid REQUIRED)
+
+catkin_package(
+  LIBRARIES
+  CFG_EXTRAS choreonoid_rosplugin-extras.cmake)
 
 include_directories(
   ${catkin_INCLUDE_DIRS} 
@@ -27,13 +31,13 @@ add_library(CnoidROSPlugin SHARED
    src/BodyROSItem.cpp
 )
 
+set_target_properties(CnoidROSPlugin PROPERTIES
+  LIBRARY_OUTPUT_DIRECTORY ${CATKIN_DEVEL_PREFIX}/${CHOREONOID_PLUGIN_SUBDIR})
+
 target_link_libraries(CnoidROSPlugin
   ${catkin_LIBRARIES}
   ${CHOREONOID_LIBRARIES}
   )
-
-set_target_properties(CnoidROSPlugin PROPERTIES
-  LIBRARY_OUTPUT_DIRECTORY ${CHOREONOID_PLUGIN_SUBDIR})
 
 install(TARGETS CnoidROSPlugin
   LIBRARY DESTINATION ${CHOREONOID_PLUGIN_SUBDIR}
