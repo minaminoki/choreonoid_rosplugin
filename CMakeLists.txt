@@ -8,10 +8,8 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   sensor_msgs
   trajectory_msgs
+  choreonoid
   )
-
-#find_package(Choreonoid 1.7 REQUIRED COMPONENTS BodyPlugin)
-find_package(Choreonoid REQUIRED)
 
 include_directories(
   ${catkin_INCLUDE_DIRS} 

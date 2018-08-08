@@ -5,7 +5,6 @@
 #include <cnoid/ConnectionSet>
 #include <ros/node_handle.h>
 #include <sensor_msgs/JointState.h>
-#include <iostream>
 
 using namespace std;
 using namespace cnoid;
