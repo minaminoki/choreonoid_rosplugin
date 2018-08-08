@@ -1,4 +1,4 @@
-#include "BodyROSItem.h"
+#include "BodyPublisherItem.h"
 #include <cnoid/Plugin>
 #include <cnoid/MessageView>
 #include <ros/init.h>
@@ -35,7 +35,7 @@ public:
         spinner.reset(new ros::AsyncSpinner(0));
         spinner->start();
 
-        BodyROSItem::initialize(this);
+        BodyPublisherItem::initialize(this);
         
         return true;
     }

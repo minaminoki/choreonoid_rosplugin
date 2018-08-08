@@ -1,25 +1,28 @@
-#ifndef CNOID_ROS_PLUGIN_BODY_ROS_ITEM_H
-#define CNOID_ROS_PLUGIN_BODY_ROS_ITEM_H
+#ifndef CNOID_ROS_PLUGIN_BODY_PUBLISHER_ITEM_H
+#define CNOID_ROS_PLUGIN_BODY_PUBLISHER_ITEM_H
 
 #include <cnoid/ControllerItem>
 
 namespace cnoid {
 
-class BodyROSItemImpl;
+class BodyPublisherItemImpl;
 
-class BodyROSItem : public ControllerItem
+class BodyPublisherItem : public ControllerItem
 {
 public:
     static void initialize(ExtensionManager* ext);
 
-    BodyROSItem();
-    BodyROSItem(const BodyROSItem& org);
-    virtual ~BodyROSItem();
+    BodyPublisherItem();
+    BodyPublisherItem(const BodyPublisherItem& org);
+    virtual ~BodyPublisherItem();
 
     virtual double timeStep() const override;
+    virtual bool initialize(ControllerIO* io) override;
+    virtual bool start() override;
     virtual void input() override;
     virtual bool control() override;
     virtual void output() override;
+    virtual void stop() override;
     
 protected:
     virtual Item* doDuplicate() const override;
@@ -32,7 +35,7 @@ protected:
     virtual bool restore(const Archive& archive) override;
 
 private:
-    BodyROSItemImpl* impl;
+    BodyPublisherItemImpl* impl;
 };
 
 }
