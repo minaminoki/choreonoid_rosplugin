@@ -15,7 +15,7 @@
   <depend>roscpp</depend>
   <depend>std_msgs</depend>
   <depend>sensor_msgs</depend>
-  <depend>trajectory_msgs</depend>
+  <depend>image_transport</depend>
   <export>
     <build_type>cmake</build_type>
   </export>

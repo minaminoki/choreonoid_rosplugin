@@ -1,11 +1,14 @@
 #include "BodyPublisherItem.h"
-#include <cnoid/ItemManager>
 #include <cnoid/BodyItem>
+#include <cnoid/Camera>
+#include <cnoid/ItemManager>
 #include <cnoid/TimeBar>
 #include <cnoid/Archive>
 #include <cnoid/ConnectionSet>
 #include <ros/node_handle.h>
 #include <sensor_msgs/JointState.h>
+#include <sensor_msgs/image_encodings.h>
+#include <image_transport/image_transport.h>
 #include <memory>
 #include "gettext.h"
 
@@ -18,18 +21,37 @@ class BodyNode
 {
 public:
     unique_ptr<ros::NodeHandle> rosNode;
-    ros::Publisher jointStatePublisher;
-    sensor_msgs::JointState jointState;
     BodyItem* bodyItem;
     ScopedConnectionSet connections;
     ScopedConnection connectionOfKinematicStateChange;
+    ScopedConnectionSet sensorConnections;
     TimeBar* timeBar;
 
+    Body* ioBody;
+    double time;
+    double timeToPublishNext;
+    double minPublishCycle;
+    double timeStep;
+    
+    ros::Publisher jointStatePublisher;
+    sensor_msgs::JointState jointState;
+
+    DeviceList<Camera> cameras;
+    vector<image_transport::Publisher> cameraImagePublishers;
+    
     BodyNode(BodyItem* bodyItem);
+
+    void start(ControllerIO* io, double maxPublishRate);
+    void input();    
+    void control();    
+    void output();    
+    void stop();    
+    
     void startToPublishKinematicStateChangeOnGUI();
     void stopToPublishKinematicStateChangeOnGUI();
     void initializeJointState(Body* body);
     void publishJointState(Body* body, double time);
+    void publishCameraImage(int index);
 };
 
 }
@@ -42,19 +64,12 @@ public:
     BodyPublisherItem* self;
     unique_ptr<BodyNode> bodyNode;
     ControllerIO* io;
-    Body* ioBody;
-    double time;
-    double timeToPublishNext;
     double maxPublishRate;
-    double minPublishCycle;
-    double timeStep;
     
     BodyPublisherItemImpl(BodyPublisherItem* self);
     BodyPublisherItemImpl(BodyPublisherItem* self, const BodyPublisherItemImpl& org);
     ~BodyPublisherItemImpl();
     void setBodyItem(BodyItem* bodyItem, bool forceUpdate);
-    bool start();
-    void input();
 };
 
 }
@@ -159,55 +174,27 @@ bool BodyPublisherItem::initialize(ControllerIO* io)
 
 bool BodyPublisherItem::start()
 {
-    return impl->start();
-}
-
-
-bool BodyPublisherItemImpl::start()
-{
-    ioBody = io->body();
-    bodyNode->stopToPublishKinematicStateChangeOnGUI();
-    bodyNode->initializeJointState(io->body());
-    time = 0.0;
-    minPublishCycle = maxPublishRate > 0.0 ? (1.0 / maxPublishRate) : 0.0;
-    timeToPublishNext = minPublishCycle;
-    timeStep = io->timeStep();
+    impl->bodyNode->start(impl->io, impl->maxPublishRate);
     return true;
 }
 
 
 void BodyPublisherItem::input()
 {
-    impl->input();
-}
-
-
-void BodyPublisherItemImpl::input()
-{
-    timeToPublishNext += timeStep;
-    if(timeToPublishNext > minPublishCycle){
-        bodyNode->publishJointState(ioBody, time);
-        timeToPublishNext -= minPublishCycle;
-    }
+    impl->bodyNode->input();
 }
 
 
 bool BodyPublisherItem::control()
 {
-    impl->time += impl->timeStep;
+    impl->bodyNode->control();
     return true;
-}
-
-
-void BodyPublisherItem::output()
-{
-
 }
 
 
 void BodyPublisherItem::stop()
 {
-    impl->bodyNode->stopToPublishKinematicStateChangeOnGUI();
+    impl->bodyNode->stop();
     impl->io = nullptr;
 }
 
@@ -243,6 +230,70 @@ BodyNode::BodyNode(BodyItem* bodyItem)
 
     jointStatePublisher = rosNode->advertise<sensor_msgs::JointState>("joint_state", 1000);
     startToPublishKinematicStateChangeOnGUI();
+
+    auto body = bodyItem->body();
+    DeviceList<> devices = body->devices();
+
+    cameras.assign(devices.extract<Camera>());
+    image_transport::ImageTransport it(*rosNode);
+    cameraImagePublishers.resize(cameras.size());
+    for(size_t i=0; i < cameras.size(); ++i){
+        auto camera = cameras[i];
+        cameraImagePublishers[i] = it.advertise(camera->name() + "/image", 1);
+    }
+}
+
+
+void BodyNode::start(ControllerIO* io, double maxPublishRate)
+{
+    ioBody = io->body();
+    time = 0.0;
+    minPublishCycle = maxPublishRate > 0.0 ? (1.0 / maxPublishRate) : 0.0;
+    timeToPublishNext = minPublishCycle;
+    timeStep = io->timeStep();
+
+    stopToPublishKinematicStateChangeOnGUI();
+    initializeJointState(ioBody);
+
+    sensorConnections.disconnect();
+    DeviceList<> devices = ioBody->devices();
+
+    cameras.assign(devices.extract<Camera>());
+    for(size_t i=0; i < cameras.size(); ++i){
+        auto camera = cameras[i];
+        sensorConnections.add(
+            camera->sigStateChanged().connect(
+                [&, i](){ publishCameraImage(i); }));
+    }
+}
+
+
+void BodyNode::input()
+{
+    timeToPublishNext += timeStep;
+    if(timeToPublishNext > minPublishCycle){
+        publishJointState(ioBody, time);
+        timeToPublishNext -= minPublishCycle;
+    }
+}
+
+
+void BodyNode::control()
+{
+    time += timeStep;
+}
+
+
+void BodyNode::output()
+{
+
+}
+
+
+void BodyNode::stop()
+{
+    stopToPublishKinematicStateChangeOnGUI();
+    sensorConnections.disconnect();
 }
 
 
@@ -290,4 +341,27 @@ void BodyNode::publishJointState(Body* body, double time)
     }
 
     jointStatePublisher.publish(jointState);
+}
+
+
+void BodyNode::publishCameraImage(int index)
+{
+    auto camera = cameras[index];
+    sensor_msgs::Image image;
+    image.header.stamp.fromSec(time);
+    image.header.frame_id = camera->name();
+    image.height = camera->image().height();
+    image.width = camera->image().width();
+    if(camera->image().numComponents() == 3){
+        image.encoding = sensor_msgs::image_encodings::RGB8;
+    } else if (camera->image().numComponents() == 1){
+        image.encoding = sensor_msgs::image_encodings::MONO8;
+    } else {
+        ROS_WARN("unsupported image component number: %i", camera->image().numComponents());
+    }
+    image.is_bigendian = 0;
+    image.step = camera->image().width() * camera->image().numComponents();
+    image.data.resize(image.step * image.height);
+    std::memcpy(&(image.data[0]), &(camera->image().pixels()[0]), image.step * image.height);
+    cameraImagePublishers[index].publish(image);
 }
