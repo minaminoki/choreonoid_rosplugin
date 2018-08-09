@@ -192,6 +192,12 @@ bool BodyPublisherItem::control()
 }
 
 
+void BodyPublisherItem::output()
+{
+    impl->bodyNode->output();
+}
+
+
 void BodyPublisherItem::stop()
 {
     impl->bodyNode->stop();
