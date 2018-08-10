@@ -16,3 +16,9 @@ target_link_libraries(${target}
 install(TARGETS ${target}
   LIBRARY DESTINATION ${CHOREONOID_PLUGIN_SUBDIR}
   )
+
+if(CHOREONOID_ENABLE_PYTHON)
+  if(CHOREONOID_USE_PYBIND11)
+    add_subdirectory(pybind11)
+  endif()
+endif()
