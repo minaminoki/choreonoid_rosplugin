@@ -14,7 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
   sensor_msgs
-  image_transport 
+  image_transport
   choreonoid
   )
 

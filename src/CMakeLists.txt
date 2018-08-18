@@ -9,7 +9,11 @@ add_cnoid_plugin(${target} SHARED
   )
 
 target_link_libraries(${target}
-  ${catkin_LIBRARIES}
+  #${catkin_LIBRARIES}
+  ${roscpp_LIBRARIES}
+  ${std_msgs_LIBRARIES}
+  ${sensor_msgs_LIBRARIES}
+  ${image_transport_LIBRARIES}
   ${CHOREONOID_LIBRARIES}
   )
 
