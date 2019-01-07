@@ -1,4 +1,50 @@
 # choreonoid ros plugin
+少し触ったので忘れないようにメモ  
+
+## choreonoidとROSをつなげる環境構築  
+* 環境構築は[ROSによる遠隔操作サンプル](http://choreonoid.org/ja/manuals/latest/wrs2018/teleoperation-ros.html)を参照
+
+## choreonoid_ros_samplesが動かない件  
+* 最新のchoreonoidでは動かなくなってしまっているため[このコミット](https://github.com/minaminoki/choreonoid_ros_samples/commit/fd449c6206d561d753d9de9326119a290ef2b43f)を参照して少し書き換える必要がある  
+* build
+```
+roscd
+catkin build choreonoid_ros_samples
+source devel/setup.bash
+```
+
+[このリンク](http://choreonoid.org/ja/manuals/latest/simulation/howto-implement-controller.html#id4)と[このリンク](http://choreonoid.org/ja/manuals/latest/simulation/pseudo-continuous-track.html)は古い情報？  
+無限軌道JOINT_SURFACE_VELOCITYの場合dqはただの状態変数でdq_targetに目的値を入れる必要がある様子  
+高精度無限軌道シミュレーションへの対応の影響の可能性あり  
+
+# choreonoid ros pluginの改造方法  
+## IMU情報をROSでPublishしたい！
+* [Bodyファイル リファレンスマニュアル](http://choreonoid.org/ja/manuals/latest/handling-models/modelfile/yaml-reference.html)を参考に対象のモデルのBodyファイルにAccelertionSensorノードとRateGyroSensorノードをつける  
+* choreonoid/share/model/Tank/TankBody.bodyファイルにはこのノードが付いている
+```
+        type: AccelerationSensor
+        name: ACCEL_SENSOR
+        id: 0
+      -
+        type: RateGyroSensor
+        name: GYRO
+        id: 0
+```
+* [このコミット](https://github.com/minaminoki/choreonoid_rosplugin/commit/4a6614a0b9d04b95f92dc74f0c2388eefbd418dd)を参考にBodyPublisherItem.cppにプログラムを追加する
+* build
+```
+roscd
+catkin build choreonoid_rosplugin
+source devel/setup.bash
+```
+* run
+```
+roscore
+CNOID_USE_GLSL=1 choreonoid src/choreonoid_ros_samples/project/ROS_Tank.cnoid
+rostopic list
+rostopic echo /Tank/GYRO/gyro
+rostopic echo /Tank/ACCEL_SENSOR/accel
+```
 
 # プログラム構成についてのメモ  
 ## ROSPlugin.cpp
@@ -12,7 +58,7 @@
 * BodyPublisherItemのメンバ関数の記述
 * BodyPublisherItemImplクラスの記述
 
-# Class
+# Classについてのメモ
 ## ROSPluginクラス
 * ChoreonoidをROSで走らせるPluginを書いている場所  
 * choreonoidのROSノードを作っている  
@@ -109,6 +155,7 @@ public:
 ### BodyNodeコンストラクタ
 * bodyItemにあるbodyのさらにdevicesを取り出してdeviceListにいれている
 * deviceListの中からCameraを抽出しカメラインスタンスにアサインしている
+* publisherを作成  
 
 ```
 BodyNode::BodyNode(BodyItem* bodyItem)
@@ -132,6 +179,34 @@ BodyNode::BodyNode(BodyItem* bodyItem)
     for(size_t i=0; i < cameras.size(); ++i){
         auto camera = cameras[i];
         cameraImagePublishers[i] = it.advertise(camera->name() + "/image", 1);
+    }
+}
+```
+
+### BodyNode startメンバ関数  
+* publish関数をconnect  
+
+```
+void BodyNode::start(ControllerIO* io, double maxPublishRate)
+{
+    ioBody = io->body();
+    time = 0.0;
+    minPublishCycle = maxPublishRate > 0.0 ? (1.0 / maxPublishRate) : 0.0;
+    timeToPublishNext = minPublishCycle;
+    timeStep = io->timeStep();
+
+    stopToPublishKinematicStateChangeOnGUI();
+    initializeJointState(ioBody);
+
+    sensorConnections.disconnect();
+    DeviceList<> devices = ioBody->devices();
+
+    cameras.assign(devices.extract<Camera>());
+    for(size_t i=0; i < cameras.size(); ++i){
+        auto camera = cameras[i];
+        sensorConnections.add(
+            camera->sigStateChanged().connect(
+                [&, i](){ publishCameraImage(i); }));
     }
 }
 ```
