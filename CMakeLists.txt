@@ -16,17 +16,17 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   image_transport
   choreonoid
-  )
+)
 
 add_definitions(${CHOREONOID_DEFINITIONS})
 
 include_directories(
   ${catkin_INCLUDE_DIRS} 
   ${CHOREONOID_INCLUDE_DIRS}
-  )
+)
 
 link_directories(
   ${CHOREONOID_LIBRARY_DIRS}
-  )
+)
 
 add_subdirectory(src)

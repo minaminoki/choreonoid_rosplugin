@@ -30,6 +30,7 @@ source devel/setup.bash
         name: GYRO
         id: 0
 ```
+* choreonoidをROSで動かす際のmodelファイルはdevel/shareの中にあるので注意！  
 * [このコミット](https://github.com/minaminoki/choreonoid_rosplugin/commit/4a6614a0b9d04b95f92dc74f0c2388eefbd418dd)を参考にBodyPublisherItem.cppにプログラムを追加する
 * build
 ```
@@ -44,6 +45,38 @@ CNOID_USE_GLSL=1 choreonoid src/choreonoid_ros_samples/project/ROS_Tank.cnoid
 rostopic list
 rostopic echo /Tank/GYRO/gyro
 rostopic echo /Tank/ACCEL_SENSOR/accel
+```
+
+## Subscribeしてみる
+サンプル  
+```
+#include <ros/ros.h>
+#include <sensor_msgs/Imu.h>
+
+class SensorSub
+{
+public:
+	SensorSub() {
+		ros::NodeHandle node;
+		accel_sub_ = node.subscribe("ROBOT_NAME/ACCEL_SENSOR/accel",1,&SensorSub::accelCallback_,this);
+	}
+private:
+	ros::Subscriber accel_sub_;
+	void accelCallback_(const sensor_msgs::Imu &accel) {
+		std::cout << accel.header.frame_id << std::endl;
+		std::cout << "linear_acceleration "
+			<< accel.linear_acceleration.x << " "
+			<< accel.linear_acceleration.y << " "
+			<< accel.linear_acceleration.z 
+			<< std::endl;
+	}
+};
+
+int main(int argc, char **argv) {
+	ros::init(argc, argv, "sensor_sub");
+	SensorSub sensorsub;
+	ros::spin();
+}
 ```
 
 # プログラム構成についてのメモ  
